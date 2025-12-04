@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { exec } = require('child_process');
 const SockJS = require('sockjs-client');
 const Stomp = require('stompjs');
