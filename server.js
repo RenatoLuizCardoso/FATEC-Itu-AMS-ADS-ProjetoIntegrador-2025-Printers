@@ -1,16 +1,8 @@
-const express = require('express');
-const cors = require('cors');
-const WebSocket = require('ws');
 const { exec } = require('child_process');
 const SockJS = require('sockjs-client');
 const Stomp = require('stompjs');
 
-const app = express();
-const PORT = 8183;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
-
-app.use(cors());
-app.use(express.json());
 
 // WebSocket connection to backend
 let stompClient = null;
@@ -64,9 +56,6 @@ function handleBackendMessage(data) {
 
 // Connect to backend on startup
 connectToBackend();
-
-// WebSocket Server (keep for backward compatibility)
-const wss = new WebSocket.Server({ port: 8184 });
 
 // Get available printers using PowerShell
 function getPrinters() {
@@ -128,56 +117,5 @@ function printContent(printerName, content) {
   });
 }
 
-// Get available printers
-app.get('/printers', async (req, res) => {
-  try {
-    const printers = await getPrinters();
-    res.json(printers);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Print content
-app.post('/print', async (req, res) => {
-  try {
-    const { printerName, content } = req.body;
-    await printContent(printerName, content);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// WebSocket connection
-wss.on('connection', (ws) => {
-  console.log('Cliente conectado');
-  
-  ws.on('message', async (message) => {
-    try {
-      const data = JSON.parse(message);
-      
-      if (data.action === 'getPrinters') {
-        const printers = await getPrinters();
-        ws.send(JSON.stringify({ action: 'printers', data: printers }));
-      }
-      
-      if (data.action === 'print') {
-        try {
-          await printContent(data.printerName, data.content);
-          ws.send(JSON.stringify({ action: 'printSuccess' }));
-        } catch (error) {
-          ws.send(JSON.stringify({ action: 'printError', error: error.message }));
-        }
-      }
-    } catch (error) {
-      ws.send(JSON.stringify({ action: 'error', error: error.message }));
-    }
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`Printer Middleware rodando na porta ${PORT}`);
-  console.log(`WebSocket rodando na porta 8184`);
-  console.log(`Conectando ao backend: ${BACKEND_URL}`);
-});
+console.log(`Printer Middleware iniciado`);
+console.log(`Conectando ao backend: ${BACKEND_URL}`);
