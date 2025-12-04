@@ -2,14 +2,70 @@ const express = require('express');
 const cors = require('cors');
 const WebSocket = require('ws');
 const { exec } = require('child_process');
+const SockJS = require('sockjs-client');
+const Stomp = require('stompjs');
 
 const app = express();
 const PORT = 8183;
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 
 app.use(cors());
 app.use(express.json());
 
-// WebSocket Server
+// WebSocket connection to backend
+let stompClient = null;
+let sessionId = null;
+
+function connectToBackend() {
+  const socket = new SockJS(`${BACKEND_URL}/ws`);
+  stompClient = Stomp.over(socket);
+  
+  stompClient.connect({}, (frame) => {
+    console.log('Conectado ao backend:', frame);
+    
+    // Register this middleware session
+    stompClient.send('/app/printer/connect', {}, JSON.stringify({}));
+    
+    // Subscribe to printer messages
+    stompClient.subscribe('/printer/middleware', (message) => {
+      handleBackendMessage(JSON.parse(message.body));
+    });
+  }, (error) => {
+    console.error('Erro na conexão com backend:', error);
+    setTimeout(connectToBackend, 5000);
+  });
+}
+
+function handleBackendMessage(data) {
+  if (data.action === 'getPrinters') {
+    getPrinters().then(printers => {
+      stompClient.send('/app/printer/response', {}, JSON.stringify({
+        action: 'printersResponse',
+        requestId: data.requestId,
+        printers: printers
+      }));
+    });
+  } else if (data.action === 'print') {
+    printContent(data.printerName, data.content).then(() => {
+      stompClient.send('/app/printer/response', {}, JSON.stringify({
+        action: 'printResponse',
+        requestId: data.requestId,
+        success: true
+      }));
+    }).catch(() => {
+      stompClient.send('/app/printer/response', {}, JSON.stringify({
+        action: 'printResponse',
+        requestId: data.requestId,
+        success: false
+      }));
+    });
+  }
+}
+
+// Connect to backend on startup
+connectToBackend();
+
+// WebSocket Server (keep for backward compatibility)
 const wss = new WebSocket.Server({ port: 8184 });
 
 // Get available printers using PowerShell
@@ -123,4 +179,5 @@ wss.on('connection', (ws) => {
 app.listen(PORT, () => {
   console.log(`Printer Middleware rodando na porta ${PORT}`);
   console.log(`WebSocket rodando na porta 8184`);
+  console.log(`Conectando ao backend: ${BACKEND_URL}`);
 });

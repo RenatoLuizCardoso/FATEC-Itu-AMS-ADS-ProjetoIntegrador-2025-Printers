@@ -9,6 +9,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "ws": "^8.14.2"
+    "ws": "^8.14.2",
+    "sockjs-client": "^1.6.1",
+    "stompjs": "^2.3.3"
   }
 }
